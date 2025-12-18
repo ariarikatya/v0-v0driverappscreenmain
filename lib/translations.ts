@@ -108,6 +108,12 @@ export const translations = {
     createOperation: "Создать операцию",
     scanError: "Ошибка сканирования",
     invalidQR: "Невалидный или просроченный QR-код",
+    cancel: "Отменить", // вместо reject для бронирований
+cancelReason: "Причина отмены",
+notFoundAtStop: "Не найден на остановке",
+accident: "Авария",
+conflict: "Конфликтная ситуация",
+other: "Иное",
   },
   en: {
     // Auth
