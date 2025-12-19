@@ -16,6 +16,7 @@ import { GeoTrackerIndicator } from "@/components/geo-tracker-indicator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { QueueQRScanner } from "@/components/queue-qr-scanner"
 import { CashQRDialog } from "@/components/cash-qr-dialog"
+import { RACE_STATE_TO_PANELS, TRIP_STATUS_TO_RACE_STATE } from "@/lib/fsm-types"
 
 const STATE = {
   PREP_IDLE: "PREP_IDLE",
@@ -245,6 +246,8 @@ export default function DriverDashboard() {
   const [areSeatsLocked, setAreSeatsLocked] = useState(true) // Seats start locked
   const [isGeoTrackerActive, setIsGeoTrackerActive] = useState(false)
   const [showStopHistory, setShowStopHistory] = useState(false)
+  const currentRaceState = TRIP_STATUS_TO_RACE_STATE[tripStatus]
+  const panelVisibility = RACE_STATE_TO_PANELS[currentRaceState]
   const scanInProgressRef = useRef(false)
   // Загрузка состояния из localStorage при монтировании
   useEffect(() => {
@@ -1763,10 +1766,8 @@ export default function DriverDashboard() {
         )}
 
         {/* CHANGE: Fixed conditional check and removed backslashes */}
-        {selectedTrip &&
-          tripStatus !== STATE.IN_ROUTE &&
-          currentStopIndex < stops.length - 1 &&
-          6 - manualOccupied - acceptedBookingsCount > 0 && (
+        {panelVisibility.queue && selectedTrip &&
+  6 - manualOccupied - acceptedBookingsCount > 0 && (
             <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -1852,7 +1853,7 @@ export default function DriverDashboard() {
             </Card>
           )}
 
-        {selectedTrip && (
+        {panelVisibility.reservation && selectedTrip && (
           <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-foreground">{t.stops}</h2>
