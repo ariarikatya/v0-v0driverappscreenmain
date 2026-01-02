@@ -126,7 +126,7 @@ const tripRoutes = {
 
 export default function DriverDashboard() {
   const [currentStopIndex, setCurrentStopIndex] = useState<number>(0)
-  const [visitedStops, setVisitedStops] = useState<Set<number>>(new Set())
+  const [visitedStops, setVisitedStops] = useState(new Set<number>())
 
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showRegister, setShowRegister] = useState(false)
@@ -152,7 +152,7 @@ export default function DriverDashboard() {
     createdAt: string
     scannedPassengerId?: number
   } | null>(null)
-  const [stopHistoryMap, setStopHistoryMap] = useState<Map<number, StopHistory>>(new Map())
+  const [stopHistoryMap, setStopHistoryMap] = useState(new Map<number, StopHistory>())
 
   const [stops, setStops] = useState<RouteStop[]>(tripRoutes["247"].stops)
 
@@ -261,7 +261,20 @@ export default function DriverDashboard() {
         setIsDirectionReversed(parsed.isDirectionReversed || false)
         setCurrentStopIndex(parsed.currentStopIndex || 0)
         setManualOccupied(parsed.manualOccupied || 0)
-        // ... восстановите другие необходимые состояния
+
+        // ДОБАВЛЕНО: Восстановление критических состояний
+        setAreSeatsLocked(parsed.areSeatsLocked ?? true)
+        setIsGeoTrackerActive(parsed.isGeoTrackerActive ?? false)
+
+        // ДОБАВЛЕНО: Восстановление таймера
+        if (parsed.prepareTimer !== undefined) {
+          setPrepareTimer(parsed.prepareTimer)
+        }
+
+        // ДОБАВЛЕНО: Восстановление visitedStops
+        if (parsed.visitedStops) {
+          setVisitedStops(new Set(parsed.visitedStops))
+        }
       } catch (e) {
         console.error("Failed to restore state", e)
       }
@@ -277,10 +290,26 @@ export default function DriverDashboard() {
       isDirectionReversed,
       currentStopIndex,
       manualOccupied,
-      // ... другие состояния
+      // ДОБАВЛЕНО: Сохранение критических состояний
+      areSeatsLocked,
+      isGeoTrackerActive,
+      prepareTimer,
+      visitedStops: Array.from(visitedStops), // Конвертируем Set в Array
     }
     localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
-  }, [tripStatus, tripId, selectedTrip, isDirectionReversed, currentStopIndex, manualOccupied])
+  }, [
+    tripStatus,
+    tripId,
+    selectedTrip,
+    isDirectionReversed,
+    currentStopIndex,
+    manualOccupied,
+    // ДОБАВЛЕНО в зависимости
+    areSeatsLocked,
+    isGeoTrackerActive,
+    prepareTimer,
+    visitedStops,
+  ])
 
   useEffect(() => {
     const savedAuthState = localStorage.getItem("driverAuthenticated")
@@ -351,13 +380,15 @@ export default function DriverDashboard() {
       description: language === "ru" ? "Подготовка рейса отменена" : "Trip preparation cancelled",
     })
   }
+  // Added complete implementation for clickStartBoarding
   const clickStartBoarding = () => {
     if (tripStatus !== STATE.PREP_TIMER) {
       console.error("[v0] Illegal transition: clickStartBoarding from", tripStatus)
       return
     }
+    // ИСПРАВЛЕНИЕ: Включаем геотрекер в начале посадки
     setIsGeoTrackerActive(true)
-    setCurrentStopIndex(0) // Начинаем с первой остановки
+    setVisitedStops((prev) => new Set(prev).add(currentStopIndex))
     setTripStatus(STATE.BOARDING)
   }
 
@@ -410,13 +441,34 @@ export default function DriverDashboard() {
 
     setVisitedStops((prev) => new Set(prev).add(currentStopIndex))
 
-    // Проверяем, это конечная остановка или промежуточная
+    // ИСПРАВЛЕНО: Подсчет статистики ПЕРЕД переходом
+    const stopBookings = bookings.filter((b) => b.fromStopIndex === currentStopIndex)
+
+    const reservedCount = stopBookings
+      .filter((b) => !b.scanned)
+      .reduce((sum, b) => sum + (b.passengerCount || b.count || 1), 0)
+
+    const boardedCount = stopBookings
+      .filter((b) => b.scanned)
+      .reduce((sum, b) => sum + (b.passengerCount || b.count || 1), 0)
+
+    setStopHistoryMap((prev) => {
+      const newMap = new Map(prev)
+      newMap.set(currentStopIndex, {
+        stopId: currentStopIndex,
+        reserved: reservedCount,
+        boarded: boardedCount,
+      })
+      return newMap
+    })
+
+    // Проверяем, конечная ли это остановка
     if (currentStopIndex === stops.length - 1) {
-      // Конечная остановка - сразу завершаем рейс
+      // Конечная остановка - завершаем рейс
       setTripStatus(STATE.FINISHED)
     } else {
-      // Промежуточная остановка - переходим в ROUTE_READY (готовы продолжить)
-      setTripStatus(STATE.ROUTE_READY)
+      // Промежуточная остановка - переходим в BOARDING для посадки
+      setTripStatus(STATE.BOARDING) // ИСПРАВЛЕНО: было ROUTE_READY
     }
   }
 
@@ -519,25 +571,35 @@ export default function DriverDashboard() {
   }
   const getTripButtonText = () => {
     if (tripStatus === STATE.PREP_IDLE) return t.prepareTrip
+
     if (tripStatus === STATE.PREP_TIMER) {
       return `${t.prepareTrip}  ${formatTimer(prepareTimer)}`
     }
-    if (tripStatus === STATE.BOARDING) return t.startBoarding
+
+    if (tripStatus === STATE.BOARDING) {
+      // ИСПРАВЛЕНО: Показываем разный текст для первой и промежуточных остановок
+      if (currentStopIndex === 0) {
+        return t.startBoarding // "Начать посадку"
+      } else {
+        return language === "ru" ? "Посадка завершена" : "Boarding Complete"
+      }
+    }
+
     if (tripStatus === STATE.ROUTE_READY) {
-      // ROUTE_READY для первого отправления и для промежуточных остановок
       if (currentStopIndex === 0) {
         return language === "ru" ? "Отправиться" : "Depart"
       } else {
         return language === "ru" ? "Продолжить рейс" : "Continue Trip"
       }
     }
+
     if (tripStatus === STATE.IN_ROUTE) {
-      // Не показываем "Прибыл" для последней остановки
-      // Для последней остановки сразу будет FINISHED
       const stopName = stops[currentStopIndex]?.name || ""
       return language === "ru" ? `Прибыл ${stopName}` : `Arrived ${stopName}`
     }
+
     if (tripStatus === STATE.FINISHED) return t.finishTrip
+
     return ""
   }
 
@@ -564,13 +626,7 @@ export default function DriverDashboard() {
     } else if (tripStatus === STATE.PREP_TIMER) {
       clickStartBoarding()
     } else if (tripStatus === STATE.BOARDING) {
-      // В BOARDING: если это первая остановка - переходим в ROUTE_READY
-      // Если промежуточная - сразу отправляемся (clickStartRoute)
-      if (currentStopIndex === 0) {
-        clickReadyForRoute()
-      } else {
-        clickStartRoute() // Сразу отправляемся с промежуточной остановки
-      }
+      clickReadyForRoute()
     } else if (tripStatus === STATE.ROUTE_READY) {
       clickStartRoute()
     } else if (tripStatus === STATE.IN_ROUTE) {
@@ -1422,7 +1478,22 @@ export default function DriverDashboard() {
       .map((_, i) => <User key={i} className="h-4 w-4" />)
   }
 
-  const isPanelsDisabled = areSeatsLocked || userStatus !== "confirmed"
+  const isPanelsDisabled = (() => {
+    // Пользователь не подтвержден - всегда блокируем
+    if (userStatus !== "confirmed") return true
+
+    // Проверяем состояние гонки
+    const raceState = TRIP_STATUS_TO_RACE_STATE[tripStatus]
+    const panelVisibility = RACE_STATE_TO_PANELS[raceState]
+
+    // Если панели должны быть видны по FSM, проверяем areSeatsLocked
+    if (panelVisibility.reservation || panelVisibility.queue) {
+      return areSeatsLocked
+    }
+
+    // В остальных случаях блокируем
+    return true
+  })()
 
   const canStartTrip = selectedTrip !== "" && tripStatus === STATE.PREP_IDLE && userStatus === "confirmed"
 
@@ -1766,92 +1837,91 @@ export default function DriverDashboard() {
         )}
 
         {/* CHANGE: Fixed conditional check and removed backslashes */}
-        {panelVisibility.queue && selectedTrip &&
-  6 - manualOccupied - acceptedBookingsCount > 0 && (
-            <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-bold text-foreground">{t.queue}</h2>
-                </div>
-                <Badge variant="secondary" className="text-lg px-3 py-1">
-                  {queuePassengers.length}
-                </Badge>
+        {panelVisibility.queue && selectedTrip && 6 - manualOccupied - acceptedBookingsCount > 0 && (
+          <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground">{t.queue}</h2>
               </div>
+              <Badge variant="secondary" className="text-lg px-3 py-1">
+                {queuePassengers.length}
+              </Badge>
+            </div>
 
-              <QueueQRScanner
-                passengers={queuePassengers}
-                onUpdate={setQueuePassengers}
-                onAccept={(passengerId) => {
-                  const passenger = queuePassengers.find((p) => p.id === passengerId)
-                  if (!passenger) return
+            <QueueQRScanner
+              passengers={queuePassengers}
+              onUpdate={setQueuePassengers}
+              onAccept={(passengerId) => {
+                const passenger = queuePassengers.find((p) => p.id === passengerId)
+                if (!passenger) return
 
-                  const seatCountToAdd = passenger.ticketCount || 1
-                  setManualOccupied((prev) => prev + seatCountToAdd)
-                  setQueuePassengers(queuePassengers.filter((p) => p.id !== passengerId))
+                const seatCountToAdd = passenger.ticketCount || 1
+                setManualOccupied((prev) => prev + seatCountToAdd)
+                setQueuePassengers(queuePassengers.filter((p) => p.id !== passengerId))
 
-                  // logFSMEvent("accept:success", {
-                  //   passengerId,
-                  //   seatsAdded: seatCountToAdd,
-                  // })
+                // logFSMEvent("accept:success", {
+                //   passengerId,
+                //   seatsAdded: seatCountToAdd,
+                // })
 
-                  toast({
-                    title: language === "ru" ? "Пассажир принят" : "Passenger accepted",
-                    description: passenger.name,
-                  })
-                }}
-                onReject={(passengerId) => {
-                  const passenger = queuePassengers.find((p) => p.id === passengerId)
-                  setQueuePassengers(queuePassengers.filter((p) => p.id !== passengerId))
+                toast({
+                  title: language === "ru" ? "Пассажир принят" : "Passenger accepted",
+                  description: passenger.name,
+                })
+              }}
+              onReject={(passengerId) => {
+                const passenger = queuePassengers.find((p) => p.id === passengerId)
+                setQueuePassengers(queuePassengers.filter((p) => p.id !== passengerId))
 
-                  // logFSMEvent("reject:success", { passengerId })
+                // logFSMEvent("reject:success", { passengerId })
 
-                  toast({
-                    title: language === "ru" ? "Пассажир отклонён" : "Passenger rejected",
-                    description: passenger?.name,
-                    variant: "destructive",
-                  })
-                }}
-                onReturn={(passengerId) => {
-                  const passenger = queuePassengers.find((p) => p.id === passengerId)
-                  if (!passenger) return
+                toast({
+                  title: language === "ru" ? "Пассажир отклонён" : "Passenger rejected",
+                  description: passenger?.name,
+                  variant: "destructive",
+                })
+              }}
+              onReturn={(passengerId) => {
+                const passenger = queuePassengers.find((p) => p.id === passengerId)
+                if (!passenger) return
 
-                  const seatCountToRevert = passenger.ticketCount || 1
+                const seatCountToRevert = passenger.ticketCount || 1
 
-                  setQueuePassengers(
-                    queuePassengers.map((p) =>
-                      p.id === passengerId
-                        ? {
-                            ...p,
-                            showQRButtons: false,
-                            qrData: undefined,
-                            scanned: false,
-                            qrError: false,
-                          }
-                        : p,
-                    ),
-                  )
+                setQueuePassengers(
+                  queuePassengers.map((p) =>
+                    p.id === passengerId
+                      ? {
+                          ...p,
+                          showQRButtons: false,
+                          qrData: undefined,
+                          scanned: false,
+                          qrError: false,
+                        }
+                      : p,
+                  ),
+                )
 
-                  if (passenger.scanned) {
-                    setManualOccupied((prev) => Math.max(0, prev - seatCountToRevert))
-                  }
+                if (passenger.scanned) {
+                  setManualOccupied((prev) => Math.max(0, prev - seatCountToRevert))
+                }
 
-                  // logFSMEvent("return:success", {
-                  //   passengerId,
-                  //   seatsReverted: seatCountToRevert,
-                  // })
+                // logFSMEvent("return:success", {
+                //   passengerId,
+                //   seatsReverted: seatCountToRevert,
+                // })
 
-                  toast({
-                    title: language === "ru" ? "Возврат" : "Return",
-                    description: language === "ru" ? "Операция отменена" : "Operation canceled",
-                  })
-                }}
-                disabled={isPanelsDisabled}
-                language={language}
-                t={t}
-              />
-            </Card>
-          )}
+                toast({
+                  title: language === "ru" ? "Возврат" : "Return",
+                  description: language === "ru" ? "Операция отменена" : "Operation canceled",
+                })
+              }}
+              disabled={isPanelsDisabled}
+              language={language}
+              t={t}
+            />
+          </Card>
+        )}
 
         {panelVisibility.reservation && selectedTrip && (
           <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
