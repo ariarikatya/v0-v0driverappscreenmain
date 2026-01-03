@@ -59,7 +59,7 @@ interface Booking {
     created_at: string
   }
   passengerCount?: number
-  cancelContext?: 'boarding' | 'future_stop' // ДОБАВЛЕНО
+  cancelContext?: "boarding" | "future_stop" // ДОБАВЛЕНО
 }
 
 interface RouteStop {
@@ -250,64 +250,94 @@ export default function DriverDashboard() {
   const currentRaceState = TRIP_STATUS_TO_RACE_STATE[tripStatus]
   const panelVisibility = RACE_STATE_TO_PANELS[currentRaceState]
   const scanInProgressRef = useRef(false)
-  // Загрузка состояния из localStorage при монтировании
-  // В useEffect для сохранения состояния:
-useEffect(() => {
-  const stateToSave = {
-    tripStatus,
-    tripId,
-    selectedTrip,
-    isDirectionReversed,
-    currentStopIndex,
-    manualOccupied,
-    areSeatsLocked,
-    isGeoTrackerActive,
-    prepareTimer,
-    visitedStops: Array.from(visitedStops),
-    bookings, // ДОБАВЛЕНО
-  }
-  localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
-}, [
-  tripStatus,
-  tripId,
-  selectedTrip,
-  isDirectionReversed,
-  currentStopIndex,
-  manualOccupied,
-  areSeatsLocked,
-  isGeoTrackerActive,
-  prepareTimer,
-  visitedStops,
-  bookings, // ДОБАВЛЕНО
-])
 
-// Загрузка состояния ПРИ МОНТИРОВАНИИ (выполняется ОДИН раз)
-// ИСПРАВЛЕНО: Загрузка и сохранение состояния
   const [isStateLoaded, setIsStateLoaded] = useState(false)
 
-  // 1. ЗАГРУЗКА состояния ПРИ МОНТИРОВАНИИ (выполняется ОДИН раз)
-  // ИСПРАВЛЕНО: Только сохранение состояния (загрузка выше, в useEffect с аутентификацией)
-  const [isStateLoaded, setIsStateLoaded] = useState(false)
-
-  // СОХРАНЕНИЕ состояния при изменениях (только после загрузки)
   useEffect(() => {
+    // Auth load
+    const savedAuthState = localStorage.getItem("driverAuthenticated")
+    if (savedAuthState === "true") {
+      setIsAuthenticated(true)
+    }
+    const savedUserStatus = localStorage.getItem("userStatus")
+    if (savedUserStatus) {
+      setUserStatus(savedUserStatus as "pending" | "approved" | "confirmed")
+    }
+
+    // App State Load
+    const savedAppState = localStorage.getItem("driverAppState")
+    if (savedAppState) {
+      try {
+        const parsedState = JSON.parse(savedAppState)
+
+        // Восстанавливаем состояния
+        if (parsedState.tripStatus) setTripStatus(parsedState.tripStatus)
+        if (parsedState.tripId) setTripId(parsedState.tripId)
+        if (parsedState.selectedTrip) setSelectedTrip(parsedState.selectedTrip)
+        if (parsedState.hasOwnProperty("isDirectionReversed")) setIsDirectionReversed(parsedState.isDirectionReversed)
+        if (parsedState.hasOwnProperty("currentStopIndex")) setCurrentStopIndex(parsedState.currentStopIndex)
+        if (parsedState.hasOwnProperty("manualOccupied")) setManualOccupied(parsedState.manualOccupied)
+        if (parsedState.hasOwnProperty("areSeatsLocked")) setAreSeatsLocked(parsedState.areSeatsLocked)
+        if (parsedState.hasOwnProperty("isGeoTrackerActive")) setIsGeoTrackerActive(parsedState.isGeoTrackerActive)
+        if (parsedState.hasOwnProperty("prepareTimer")) setPrepareTimer(parsedState.prepareTimer)
+
+        if (parsedState.visitedStops) setVisitedStops(new Set(parsedState.visitedStops))
+        if (parsedState.bookings) setBookings(parsedState.bookings)
+        if (parsedState.seats) setSeats(parsedState.seats)
+        if (parsedState.queuePassengers) setQueuePassengers(parsedState.queuePassengers)
+
+        // Восстанавливаем Map
+        if (parsedState.stopHistoryMap) {
+          const stopHistoryMap = new Map<number, StopHistory>()
+          for (const key in parsedState.stopHistoryMap) {
+            stopHistoryMap.set(Number(key), parsedState.stopHistoryMap[key])
+          }
+          setStopHistoryMap(stopHistoryMap)
+        }
+
+        // Обновляем остановки
+        const selectedRouteData = tripRoutes[parsedState.selectedTrip as keyof typeof tripRoutes]
+        if (selectedRouteData) {
+          setStops(parsedState.isDirectionReversed ? [...selectedRouteData.stops].reverse() : selectedRouteData.stops)
+        }
+
+        console.log("[v0] State loaded successfully from localStorage")
+      } catch (error) {
+        console.error("Failed to load state, using defaults:", error)
+      }
+    }
+
+    // Важно: устанавливаем флаг загрузки в true в любом случае
+    setIsStateLoaded(true)
+  }, [])
+
+  // 2. СОХРАНЕНИЕ
+  useEffect(() => {
+    // Не сохраняем, пока данные не загрузились первый раз
     if (!isStateLoaded) {
-      console.log("[v0] Skipping save - state not loaded yet")
       return
     }
-    
-    // Не сохраняем пустое начальное состояние
-    if (!selectedTrip && tripStatus === STATE.PREP_IDLE && !tripId) {
-      console.log("[v0] Skipping save - initial state")
-      return
+
+    // Не сохраняем дефолтное состояние "подготовки", если нет ID поездки и таймер дефолтный
+    // Это предотвращает перезапись при пустом старте
+    if (
+      tripStatus === STATE.PREP_IDLE &&
+      !tripId &&
+      prepareTimer === 600 &&
+      selectedTrip === "247" &&
+      !isDirectionReversed
+    ) {
+      // Проверяем, не является ли это "первым рендером" с дефолтными данными поверх старых
+      // Но лучше сохранить, если мы уверены что загрузка прошла
+      // console.log("[v0] Skipping save of default idle state")
+      // return
     }
-    
-    // Конвертируем Map в объект для сохранения
+
     const stopHistoryObject: Record<number, StopHistory> = {}
     stopHistoryMap.forEach((value, key) => {
       stopHistoryObject[key] = value
     })
-    
+
     const stateToSave = {
       tripStatus,
       tripId,
@@ -325,11 +355,12 @@ useEffect(() => {
       queuePassengers,
       stops,
     }
-    
+
     localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
-    console.log("[v0] State saved to localStorage")
+    // console.log("[v0] State saved") // Раскомментируйте для отладки
   }, [
-    isStateLoaded, // ДОБАВЛЕНО
+    // ВАЖНО: Убран isStateLoaded из зависимостей, чтобы смена флага не триггерила сохранение
+    // Сохраняем только при изменении реальных данных:
     tripStatus,
     tripId,
     selectedTrip,
@@ -346,17 +377,6 @@ useEffect(() => {
     queuePassengers,
     stops,
   ])
-
-  useEffect(() => {
-    const savedAuthState = localStorage.getItem("driverAuthenticated")
-    if (savedAuthState === "true") {
-      setIsAuthenticated(true)
-    }
-    const savedUserStatus = localStorage.getItem("userStatus")
-    if (savedUserStatus) {
-      setUserStatus(savedUserStatus as "pending" | "approved" | "confirmed")
-    }
-  }, [])
 
   useEffect(() => {
     if (tripStatus === STATE.PREP_TIMER) {
@@ -509,101 +529,101 @@ useEffect(() => {
   }
 
   const clickFinish = () => {
-  if (tripStatus !== "FINISHED") {
-    console.error("[v0] Illegal transition: clickFinish from", tripStatus)
-    return
+    if (tripStatus !== "FINISHED") {
+      console.error("[v0] Illegal transition: clickFinish from", tripStatus)
+      return
+    }
+    setIsGeoTrackerActive(false)
+    setAreSeatsLocked(true)
+    setPrepareTimer(600)
+    setTripId("")
+    setIsDirectionReversed(false)
+    setTripStatus(STATE.PREP_IDLE)
+    setCurrentStopIndex(0)
+    setVisitedStops(new Set())
+    setStopHistoryMap(new Map())
+    setManualOccupied(0)
+
+    // Сбросить статусы броней к начальному состоянию
+    setBookings([
+      {
+        id: 1,
+        passengerName: "Ольга В.",
+        pickupTime: "14:15",
+        pickupLocation: tripRoutes["247"].stops[1].name,
+        fromStopIndex: 1,
+        toStopIndex: 3,
+        amount: 320,
+        count: 1,
+        passengerCount: 1,
+      },
+      {
+        id: 2,
+        passengerName: "Дмитрий Н.",
+        pickupTime: "14:15",
+        pickupLocation: tripRoutes["247"].stops[1].name,
+        fromStopIndex: 1,
+        toStopIndex: 3,
+        amount: 320,
+        count: 2,
+        passengerCount: 1,
+      },
+      {
+        id: 3,
+        passengerName: "Елена Т.",
+        pickupTime: "14:45",
+        pickupLocation: tripRoutes["247"].stops[2].name,
+        fromStopIndex: 2,
+        toStopIndex: 3,
+        amount: 180,
+        count: 1,
+        passengerCount: 1,
+      },
+    ])
+
+    setSeats([
+      {
+        id: 1,
+        status: "occupied",
+        passengerName: "Иван П.",
+        fromStop: 0,
+        toStop: 3,
+        paymentMethod: "qr",
+        amountPaid: 450,
+      },
+      {
+        id: 2,
+        status: "occupied",
+        passengerName: "Мария С.",
+        fromStop: 0,
+        toStop: 2,
+        paymentMethod: "cash",
+        amountPaid: 280,
+      },
+      { id: 3, status: "free" },
+      { id: 4, status: "free" },
+      {
+        id: 5,
+        status: "occupied",
+        passengerName: "Алексей К.",
+        fromStop: 0,
+        toStop: 3,
+        paymentMethod: "qr",
+        amountPaid: 380,
+      },
+      { id: 6, status: "free" },
+    ])
+
+    setQueuePassengers([
+      { id: 1, name: "Петр С.", queuePosition: 1, isFirst: true, count: 1, ticketCount: 1, orderNumber: 1 },
+      { id: 2, name: "Анна М.", queuePosition: 2, isFirst: false, count: 2, ticketCount: 2, orderNumber: 2 },
+      { id: 3, name: "Игорь Л.", queuePosition: 3, isFirst: false, count: 1, ticketCount: 1, orderNumber: 3 },
+      { id: 4, name: "Ольга К.", queuePosition: 4, isFirst: false, count: 3, ticketCount: 3, orderNumber: 4 },
+      { id: 5, name: "Сергей Д.", queuePosition: 5, isFirst: false, count: 1, ticketCount: 1, orderNumber: 5 },
+    ])
+
+    // НЕ ОЧИЩАЕМ localStorage здесь - он автоматически обновится через useEffect
   }
-  setIsGeoTrackerActive(false)
-  setAreSeatsLocked(true)
-  setPrepareTimer(600)
-  setTripId("")
-  setIsDirectionReversed(false)
-  setTripStatus(STATE.PREP_IDLE)
-  setCurrentStopIndex(0)
-  setVisitedStops(new Set())
-  setStopHistoryMap(new Map())
-  setManualOccupied(0)
-
-  // Сбросить статусы броней к начальному состоянию
-  setBookings([
-    {
-      id: 1,
-      passengerName: "Ольга В.",
-      pickupTime: "14:15",
-      pickupLocation: tripRoutes["247"].stops[1].name,
-      fromStopIndex: 1,
-      toStopIndex: 3,
-      amount: 320,
-      count: 1,
-      passengerCount: 1,
-    },
-    {
-      id: 2,
-      passengerName: "Дмитрий Н.",
-      pickupTime: "14:15",
-      pickupLocation: tripRoutes["247"].stops[1].name,
-      fromStopIndex: 1,
-      toStopIndex: 3,
-      amount: 320,
-      count: 2,
-      passengerCount: 1,
-    },
-    {
-      id: 3,
-      passengerName: "Елена Т.",
-      pickupTime: "14:45",
-      pickupLocation: tripRoutes["247"].stops[2].name,
-      fromStopIndex: 2,
-      toStopIndex: 3,
-      amount: 180,
-      count: 1,
-      passengerCount: 1,
-    },
-  ])
-
-  setSeats([
-    {
-      id: 1,
-      status: "occupied",
-      passengerName: "Иван П.",
-      fromStop: 0,
-      toStop: 3,
-      paymentMethod: "qr",
-      amountPaid: 450,
-    },
-    {
-      id: 2,
-      status: "occupied",
-      passengerName: "Мария С.",
-      fromStop: 0,
-      toStop: 2,
-      paymentMethod: "cash",
-      amountPaid: 280,
-    },
-    { id: 3, status: "free" },
-    { id: 4, status: "free" },
-    {
-      id: 5,
-      status: "occupied",
-      passengerName: "Алексей К.",
-      fromStop: 0,
-      toStop: 3,
-      paymentMethod: "qr",
-      amountPaid: 380,
-    },
-    { id: 6, status: "free" },
-  ])
-
-  setQueuePassengers([
-    { id: 1, name: "Петр С.", queuePosition: 1, isFirst: true, count: 1, ticketCount: 1, orderNumber: 1 },
-    { id: 2, name: "Анна М.", queuePosition: 2, isFirst: false, count: 2, ticketCount: 2, orderNumber: 2 },
-    { id: 3, name: "Игорь Л.", queuePosition: 3, isFirst: false, count: 1, ticketCount: 1, orderNumber: 3 },
-    { id: 4, name: "Ольга К.", queuePosition: 4, isFirst: false, count: 3, ticketCount: 3, orderNumber: 4 },
-    { id: 5, name: "Сергей Д.", queuePosition: 5, isFirst: false, count: 1, ticketCount: 1, orderNumber: 5 },
-  ])
-  
-  // НЕ ОЧИЩАЕМ localStorage здесь - он автоматически обновится через useEffect
-}
   const getTripButtonText = () => {
     if (tripStatus === STATE.PREP_IDLE) return t.prepareTrip
 
@@ -716,50 +736,15 @@ useEffect(() => {
       return
     }
 
-    // Если была ошибка QR, открываем сканер снова
-    if (booking.qrError) {
-      setBookings(
-        bookings.map((b) =>
-          b.id === bookingId
-            ? {
-                ...b,
-                qrError: undefined,
-              }
-            : b,
-        ),
-      )
-
-      // Открываем сканер заново
+    // Если бронь зарезервирована, открываем сканер QR
+    if (booking.reserved) {
+      console.log("[v0] accept:clicked", {
+        bookingId: bookingId,
+        amount: booking.amount,
+        timestamp: new Date().toISOString(),
+      })
       handleOpenBookingScanner(bookingId)
-      return
     }
-
-    // Остальная логика возврата...
-    setBookings(
-      bookings.map((b) =>
-        b.id === bookingId
-          ? {
-              ...b,
-              showQRButtons: false,
-              qrData: undefined,
-              accepted: false,
-              reserved: false,
-              scanned: false,
-              qrError: undefined,
-            }
-          : b,
-      ),
-    )
-
-    if (booking.scanned) {
-      const seatCountToRevert = booking.passengerCount || booking.count || 1
-      setManualOccupied((prev) => Math.max(0, prev - seatCountToRevert))
-    }
-
-    toast({
-      title: language === "ru" ? "Возврат" : "Return",
-      description: language === "ru" ? "Бронь возвращена в начальное состояние" : "Booking returned to initial state",
-    })
   }
 
   const handleReturnQueuePassenger = (passengerId: number) => {
@@ -807,7 +792,7 @@ useEffect(() => {
     // Если бронь зарезервирована, открываем сканер QR
     if (booking.reserved) {
       console.log("[v0] accept:clicked", {
-        bookingId,
+        bookingId: bookingId,
         amount: booking.amount,
         timestamp: new Date().toISOString(),
       })
@@ -815,56 +800,56 @@ useEffect(() => {
     }
   }
   const handleReserveBooking = (bookingId: number) => {
-  if (areSeatsLocked) {
-    console.log("[v0] ui:blocked", { action: "reserveBooking", reason: "seatsLocked" })
-    toast({
-      title: t.error,
-      description: language === "ru" ? "Сначала начните подготовку рейса" : "Start trip preparation first",
-      variant: "destructive",
+    if (areSeatsLocked) {
+      console.log("[v0] ui:blocked", { action: "reserveBooking", reason: "seatsLocked" })
+      toast({
+        title: t.error,
+        description: language === "ru" ? "Сначала начните подготовку рейса" : "Start trip preparation first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const booking = bookings.find((b) => b.id === bookingId)
+    if (!booking) return
+
+    // Проверяем наличие свободных мест
+    const freeSeatsCount = 6 - manualOccupied - acceptedBookingsCount
+    const bookingCount = booking.count || 1
+
+    if (freeSeatsCount < bookingCount) {
+      console.log("[v0] ui:blocked", { action: "reserveBooking", reason: "noFreeSeats" })
+      toast({
+        title: t.error,
+        description: language === "ru" ? "Недостаточно свободных мест" : "Not enough free seats",
+        variant: "destructive",
+      })
+      return
+    }
+
+    console.log("[v0] booking:reserved", {
+      bookingId,
+      count: bookingCount,
+      timestamp: new Date().toISOString(),
     })
-    return
-  }
 
-  const booking = bookings.find((b) => b.id === bookingId)
-  if (!booking) return
+    setBookings(
+      bookings.map((b) =>
+        b.id === bookingId
+          ? {
+              ...b,
+              reserved: true,
+              accepted: true, // ДОБАВЛЕНО: устанавливаем accepted при резервировании
+            }
+          : b,
+      ),
+    )
 
-  // Проверяем наличие свободных мест
-  const freeSeatsCount = 6 - manualOccupied - acceptedBookingsCount
-  const bookingCount = booking.count || 1
-
-  if (freeSeatsCount < bookingCount) {
-    console.log("[v0] ui:blocked", { action: "reserveBooking", reason: "noFreeSeats" })
     toast({
-      title: t.error,
-      description: language === "ru" ? "Недостаточно свободных мест" : "Not enough free seats",
-      variant: "destructive",
+      title: language === "ru" ? "Бронь принята" : "Booking reserved",
+      description: `${booking.passengerName} - ${language === "ru" ? "место зарезервировано" : "seat reserved"}`,
     })
-    return
   }
-
-  console.log("[v0] booking:reserved", {
-    bookingId,
-    count: bookingCount,
-    timestamp: new Date().toISOString(),
-  })
-
-  setBookings(
-    bookings.map((b) =>
-      b.id === bookingId
-        ? {
-            ...b,
-            reserved: true,
-            accepted: true, // ДОБАВЛЕНО: устанавливаем accepted при резервировании
-          }
-        : b,
-    ),
-  )
-
-  toast({
-    title: language === "ru" ? "Бронь принята" : "Booking reserved",
-    description: `${booking.passengerName} - ${language === "ru" ? "место зарезервировано" : "seat reserved"}`,
-  })
-}
 
   const handleRejectBooking = (bookingId: number) => {
     const booking = bookings.find((b) => b.id === bookingId)
@@ -885,18 +870,14 @@ useEffect(() => {
     })
   }
   const handleCancelBooking = (bookingId: number, isOnCurrentStop: boolean) => {
-  setCancelBookingId(bookingId)
-  setCancelReason("")
-  // Сохраняем информацию, это бронь на текущей остановке или нет
-  setBookings((prev) =>
-    prev.map((b) =>
-      b.id === bookingId
-        ? { ...b, cancelContext: isOnCurrentStop ? 'boarding' : 'future_stop' }
-        : b
+    setCancelBookingId(bookingId)
+    setCancelReason("")
+    // Сохраняем информацию, это бронь на текущей остановке или нет
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, cancelContext: isOnCurrentStop ? "boarding" : "future_stop" } : b)),
     )
-  )
-  setShowCancelDialog(true)
-}
+    setShowCancelDialog(true)
+  }
 
   const confirmCancelBooking = () => {
     if (!cancelBookingId || !cancelReason) return
@@ -943,7 +924,7 @@ useEffect(() => {
           status: "occupied",
           passengerName: booking.passengerName,
           fromStop: booking.fromStopIndex,
-          toStop: booking.toStopIndex,
+          toToStop: booking.toStopIndex,
           paymentMethod: "qr",
           amountPaid: booking.amount / bookingCount,
         }
@@ -1006,7 +987,7 @@ useEffect(() => {
               status: "free" as const,
               passengerName: undefined,
               fromStop: undefined,
-              toStop: undefined,
+              toToStop: undefined,
               paymentMethod: undefined,
               amountPaid: undefined,
             }
@@ -1833,51 +1814,52 @@ useEffect(() => {
       </div>
 
       <div className="px-2 pt-4 space-y-6">
-        {selectedTrip && panelVisibility.cash && ( // ИЗМЕНЕНО: добавлено panelVisibility.cash
-  <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
-    <h2 className="text-lg font-bold text-foreground mb-4">{t.seats}</h2>
-    <div className="grid grid-cols-4 gap-3">
-      <div className="text-center p-4 rounded-lg bg-secondary">
-        <div className="flex items-center justify-center gap-1 mb-2">
-          <Button
-            size="icon"
-            variant="outline"
-            className="h-6 w-6 bg-transparent flex-shrink-0"
-            onClick={() => setManualOccupied(Math.max(0, manualOccupied - 1))}
-            disabled={manualOccupied === 0 || isPanelsDisabled}
-          >
-            <Minus className="h-3 w-3" />
-          </Button>
-          <div className="text-2xl font-bold text-primary min-w-[2rem]">{occupiedCount}</div>
-          <Button
-            size="icon"
-            variant="outline"
-            className="h-6 w-6 bg-transparent flex-shrink-0"
-            onClick={() => setManualOccupied(Math.min(6, manualOccupied + 1))}
-            disabled={manualOccupied === 6 || isPanelsDisabled}
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
-        </div>
-        <div className="text-xs text-muted-foreground">{t.occupied}</div>
-      </div>
-      <div className="text-center p-4 rounded-lg bg-secondary">
-        <div className="text-2xl font-bold text-blue-600">
-          {acceptedBookingsCount}:{pendingBookingsCount}
-        </div>
-        <div className="text-xs text-muted-foreground mt-1">{t.bookingsShort}</div>
-      </div>
-      <div className="text-center p-4 rounded-lg bg-secondary">
-        <div className="text-2xl font-bold text-accent">{freeCount}</div>
-        <div className="text-xs text-muted-foreground mt-1">{t.free}</div>
-      </div>
-      <div className="text-center p-4 rounded-lg bg-secondary">
-        <div className="text-2xl font-bold text-foreground">6</div>
-        <div className="text-xs text-muted-foreground mt-1">{t.total}</div>
-      </div>
-    </div>
-  </Card>
-)}
+        {selectedTrip &&
+          panelVisibility.cash && ( // ИЗМЕНЕНО: добавлено panelVisibility.cash
+            <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
+              <h2 className="text-lg font-bold text-foreground mb-4">{t.seats}</h2>
+              <div className="grid grid-cols-4 gap-3">
+                <div className="text-center p-4 rounded-lg bg-secondary">
+                  <div className="flex items-center justify-center gap-1 mb-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-6 w-6 bg-transparent flex-shrink-0"
+                      onClick={() => setManualOccupied(Math.max(0, manualOccupied - 1))}
+                      disabled={manualOccupied === 0 || isPanelsDisabled}
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <div className="text-2xl font-bold text-primary min-w-[2rem]">{occupiedCount}</div>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-6 w-6 bg-transparent flex-shrink-0"
+                      onClick={() => setManualOccupied(Math.min(6, manualOccupied + 1))}
+                      disabled={manualOccupied === 6 || isPanelsDisabled}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground">{t.occupied}</div>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-secondary">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {acceptedBookingsCount}:{pendingBookingsCount}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">{t.bookingsShort}</div>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-secondary">
+                  <div className="text-2xl font-bold text-accent">{freeCount}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{t.free}</div>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-secondary">
+                  <div className="text-2xl font-bold text-foreground">6</div>
+                  <div className="text-xs text-muted-foreground mt-1">{t.total}</div>
+                </div>
+              </div>
+            </Card>
+          )}
 
         {/* CHANGE: Fixed conditional check and removed backslashes */}
         {panelVisibility.queue && selectedTrip && 6 - manualOccupied - acceptedBookingsCount > 0 && (
@@ -2162,7 +2144,7 @@ useEffect(() => {
                                         {language === "ru" ? "Взять" : "Reserve"}
                                       </Button>
                                       <Button
-  onClick={() => handleCancelBooking(booking.id, stop.id === currentStopIndex)}
+                                        onClick={() => handleCancelBooking(booking.id, stop.id === currentStopIndex)}
                                         className="h-9 w-auto px-3 text-sm font-semibold"
                                         variant="outline"
                                         size="sm"
@@ -2177,17 +2159,17 @@ useEffect(() => {
                                   {!booking.qrError && !booking.showQRButtons && booking.reserved && (
                                     <div className="flex gap-2">
                                       <Button
-  onClick={() => handleAcceptBooking(booking.id)}
-  className="flex-1 h-9 text-sm font-semibold"
-  variant="default"
-  size="sm"
-  disabled={isPanelsDisabled || stop.id !== currentStopIndex} // ДОБАВЛЕНО: проверка остановки
->
-  <QrCode className="mr-2 h-4 w-4" />
-  {t.scanQR}
-</Button>
+                                        onClick={() => handleAcceptBooking(booking.id)}
+                                        className="flex-1 h-9 text-sm font-semibold"
+                                        variant="default"
+                                        size="sm"
+                                        disabled={isPanelsDisabled || stop.id !== currentStopIndex} // ДОБАВЛЕНО: проверка остановки
+                                      >
+                                        <QrCode className="mr-2 h-4 w-4" />
+                                        {t.scanQR}
+                                      </Button>
                                       <Button
-  onClick={() => handleCancelBooking(booking.id, stop.id === currentStopIndex)}
+                                        onClick={() => handleCancelBooking(booking.id, stop.id === currentStopIndex)}
                                         className="h-9 w-auto px-3 text-sm font-semibold"
                                         variant="outline"
                                         size="sm"
@@ -2250,64 +2232,60 @@ useEffect(() => {
       />
 
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-  <DialogContent onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
-    <DialogHeader>
-      <DialogTitle>{language === "ru" ? "Причина отмены" : "Cancellation reason"}</DialogTitle>
-    </DialogHeader>
-    <div className="space-y-3">
-      {(() => {
-        const booking = bookings.find((b) => b.id === cancelBookingId)
-        const isBoardingStop = booking?.cancelContext === 'boarding'
-        
-        const boardingReasons = [
-          { value: "big_queue", label: language === "ru" ? "Большая очередь" : "Big queue" },
-          { value: "group_full", label: language === "ru" ? "Группа на все места" : "Group for all seats" },
-          { value: "other", label: language === "ru" ? "Иное" : "Other" },
-        ]
-        
-        const futureStopReasons = [
-          { value: "not_found", label: language === "ru" ? "Не найден на остановке" : "Not found at stop" },
-          { value: "accident", label: language === "ru" ? "Авария" : "Accident" },
-          { value: "conflict", label: language === "ru" ? "Конфликтная ситуация" : "Conflict situation" },
-          { value: "other", label: language === "ru" ? "Иное" : "Other" },
-        ]
-        
-        const reasons = isBoardingStop ? boardingReasons : futureStopReasons
-        
-        return reasons.map((reason) => (
-          <Button
-            key={reason.value}
-            onClick={() => setCancelReason(reason.label)}
-            variant={cancelReason === reason.label ? "default" : "outline"}
-            className="w-full justify-start"
-          >
-            {reason.label}
-          </Button>
-        ))
-      })()}
-    </div>
-    <div className="flex gap-2 pt-4">
-      <Button
-        onClick={confirmCancelBooking}
-        disabled={!cancelReason}
-        className="flex-1"
-      >
-        {language === "ru" ? "OK" : "OK"}
-      </Button>
-      <Button
-        onClick={() => {
-          setShowCancelDialog(false)
-          setCancelBookingId(null)
-          setCancelReason("")
-        }}
-        variant="outline"
-        className="flex-1"
-      >
-        {language === "ru" ? "Отмена" : "Cancel"}
-      </Button>
-    </div>
-  </DialogContent>
-</Dialog>
+        <DialogContent onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>{language === "ru" ? "Причина отмены" : "Cancellation reason"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {(() => {
+              const booking = bookings.find((b) => b.id === cancelBookingId)
+              const isBoardingStop = booking?.cancelContext === "boarding"
+
+              const boardingReasons = [
+                { value: "big_queue", label: language === "ru" ? "Большая очередь" : "Big queue" },
+                { value: "group_full", label: language === "ru" ? "Группа на все места" : "Group for all seats" },
+                { value: "other", label: language === "ru" ? "Иное" : "Other" },
+              ]
+
+              const futureStopReasons = [
+                { value: "not_found", label: language === "ru" ? "Не найден на остановке" : "Not found at stop" },
+                { value: "accident", label: language === "ru" ? "Авария" : "Accident" },
+                { value: "conflict", label: language === "ru" ? "Конфликтная ситуация" : "Conflict situation" },
+                { value: "other", label: language === "ru" ? "Иное" : "Other" },
+              ]
+
+              const reasons = isBoardingStop ? boardingReasons : futureStopReasons
+
+              return reasons.map((reason) => (
+                <Button
+                  key={reason.value}
+                  onClick={() => setCancelReason(reason.label)}
+                  variant={cancelReason === reason.label ? "default" : "outline"}
+                  className="w-full justify-start"
+                >
+                  {reason.label}
+                </Button>
+              ))
+            })()}
+          </div>
+          <div className="flex gap-2 pt-4">
+            <Button onClick={confirmCancelBooking} disabled={!cancelReason} className="flex-1">
+              {language === "ru" ? "OK" : "OK"}
+            </Button>
+            <Button
+              onClick={() => {
+                setShowCancelDialog(false)
+                setCancelBookingId(null)
+                setCancelReason("")
+              }}
+              variant="outline"
+              className="flex-1"
+            >
+              {language === "ru" ? "Отмена" : "Cancel"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
