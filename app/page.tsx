@@ -2242,15 +2242,15 @@ export default function DriverDashboard() {
               const isBoardingStop = booking?.cancelContext === "boarding"
 
               const boardingReasons = [
-                { value: "big_queue", label: language === "ru" ? "Большая очередь" : "Big queue" },
-                { value: "group_full", label: language === "ru" ? "Группа на все места" : "Group for all seats" },
+                { value: "not_found", label: language === "ru" ? "Не найден на остановке" : "Not found at stop" },
+                { value: "accident", label: language === "ru" ? "Авария" : "Accident" },
+                { value: "conflict", label: language === "ru" ? "Конфликтная ситуация" : "Conflict situation" },
                 { value: "other", label: language === "ru" ? "Иное" : "Other" },
               ]
 
               const futureStopReasons = [
-                { value: "not_found", label: language === "ru" ? "Не найден на остановке" : "Not found at stop" },
-                { value: "accident", label: language === "ru" ? "Авария" : "Accident" },
-                { value: "conflict", label: language === "ru" ? "Конфликтная ситуация" : "Conflict situation" },
+                { value: "big_queue", label: language === "ru" ? "Большая очередь" : "Big queue" },
+                { value: "group_full", label: language === "ru" ? "Группа на все места" : "Group for all seats" },
                 { value: "other", label: language === "ru" ? "Иное" : "Other" },
               ]
 
