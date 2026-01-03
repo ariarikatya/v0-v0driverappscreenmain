@@ -282,86 +282,116 @@ useEffect(() => {
 ])
 
 // Загрузка состояния ПРИ МОНТИРОВАНИИ (выполняется ОДИН раз)
-useEffect(() => {
-  const savedState = localStorage.getItem("driverAppState")
-  if (savedState) {
-    try {
-      const parsed = JSON.parse(savedState)
-      
-      console.log("[v0] Restoring state from localStorage:", parsed)
-      
-      // Восстанавливаем базовые состояния - ПРОВЕРЯЕМ что значение существует
-      if (parsed.tripStatus !== undefined) setTripStatus(parsed.tripStatus)
-      if (parsed.tripId !== undefined) setTripId(parsed.tripId)
-      if (parsed.selectedTrip !== undefined) setSelectedTrip(parsed.selectedTrip)
-      if (parsed.isDirectionReversed !== undefined) setIsDirectionReversed(parsed.isDirectionReversed)
-      if (parsed.currentStopIndex !== undefined) setCurrentStopIndex(parsed.currentStopIndex)
-      if (parsed.manualOccupied !== undefined) setManualOccupied(parsed.manualOccupied)
-      
-      // Критические состояния
-      if (parsed.areSeatsLocked !== undefined) setAreSeatsLocked(parsed.areSeatsLocked)
-      if (parsed.isGeoTrackerActive !== undefined) setIsGeoTrackerActive(parsed.isGeoTrackerActive)
-      
-      // Таймер
-      if (parsed.prepareTimer !== undefined) setPrepareTimer(parsed.prepareTimer)
-      
-      // Посещенные остановки
-      if (parsed.visitedStops && Array.isArray(parsed.visitedStops)) {
-        setVisitedStops(new Set(parsed.visitedStops))
-      }
-      
-      // История остановок
-      if (parsed.stopHistoryMap) {
-        const restoredMap = new Map()
-        Object.entries(parsed.stopHistoryMap).forEach(([key, value]) => {
-          restoredMap.set(Number(key), value)
-        })
-        setStopHistoryMap(restoredMap)
-      }
-      
-      // Бронирования с полным сохранением статусов
-      if (parsed.bookings && Array.isArray(parsed.bookings)) {
-        setBookings(parsed.bookings)
-      }
-      
-      // Места
-      if (parsed.seats && Array.isArray(parsed.seats)) {
-        setSeats(parsed.seats)
-      }
-      
-      // Очередь
-      if (parsed.queuePassengers && Array.isArray(parsed.queuePassengers)) {
-        setQueuePassengers(parsed.queuePassengers)
-      }
-      
-      // Маршрут (остановки)
-      if (parsed.stops && Array.isArray(parsed.stops)) {
-        setStops(parsed.stops)
-      }
-      
-      console.log("[v0] State successfully restored from localStorage")
-    } catch (e) {
-      console.error("[v0] Failed to restore state:", e)
-    }
-  }
-}, []) // ВАЖНО: Пустой массив зависимостей
+// ИСПРАВЛЕНО: Загрузка и сохранение состояния
+  const [isStateLoaded, setIsStateLoaded] = useState(false)
 
-// Сохранение состояния при изменениях
-useEffect(() => {
-  // Не сохраняем, если мы в начальном состоянии без выбранного рейса
-  // (это предотвратит сохранение пустого состояния при первой загрузке)
-  if (!selectedTrip && tripStatus === STATE.PREP_IDLE && !tripId) {
-    console.log("[v0] Skipping save - initial state")
-    return
-  }
-  
-  // Конвертируем Map в объект для сохранения
-  const stopHistoryObject: Record<number, StopHistory> = {}
-  stopHistoryMap.forEach((value, key) => {
-    stopHistoryObject[key] = value
-  })
-  
-  const stateToSave = {
+  // 1. ЗАГРУЗКА состояния ПРИ МОНТИРОВАНИИ (выполняется ОДИН раз)
+  useEffect(() => {
+    const savedState = localStorage.getItem("driverAppState")
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState)
+        
+        console.log("[v0] Restoring state from localStorage:", parsed)
+        
+        // Восстанавливаем базовые состояния
+        if (parsed.tripStatus !== undefined) setTripStatus(parsed.tripStatus)
+        if (parsed.tripId !== undefined) setTripId(parsed.tripId)
+        if (parsed.selectedTrip !== undefined) setSelectedTrip(parsed.selectedTrip)
+        if (parsed.isDirectionReversed !== undefined) setIsDirectionReversed(parsed.isDirectionReversed)
+        if (parsed.currentStopIndex !== undefined) setCurrentStopIndex(parsed.currentStopIndex)
+        if (parsed.manualOccupied !== undefined) setManualOccupied(parsed.manualOccupied)
+        
+        // Критические состояния
+        if (parsed.areSeatsLocked !== undefined) setAreSeatsLocked(parsed.areSeatsLocked)
+        if (parsed.isGeoTrackerActive !== undefined) setIsGeoTrackerActive(parsed.isGeoTrackerActive)
+        
+        // Таймер
+        if (parsed.prepareTimer !== undefined) setPrepareTimer(parsed.prepareTimer)
+        
+        // Посещенные остановки
+        if (parsed.visitedStops && Array.isArray(parsed.visitedStops)) {
+          setVisitedStops(new Set(parsed.visitedStops))
+        }
+        
+        // История остановок
+        if (parsed.stopHistoryMap) {
+          const restoredMap = new Map()
+          Object.entries(parsed.stopHistoryMap).forEach(([key, value]) => {
+            restoredMap.set(Number(key), value)
+          })
+          setStopHistoryMap(restoredMap)
+        }
+        
+        // Бронирования с полным сохранением статусов
+        if (parsed.bookings && Array.isArray(parsed.bookings)) {
+          setBookings(parsed.bookings)
+        }
+        
+        // Места
+        if (parsed.seats && Array.isArray(parsed.seats)) {
+          setSeats(parsed.seats)
+        }
+        
+        // Очередь
+        if (parsed.queuePassengers && Array.isArray(parsed.queuePassengers)) {
+          setQueuePassengers(parsed.queuePassengers)
+        }
+        
+        // Маршрут (остановки)
+        if (parsed.stops && Array.isArray(parsed.stops)) {
+          setStops(parsed.stops)
+        }
+        
+        console.log("[v0] State successfully restored from localStorage")
+      } catch (e) {
+        console.error("[v0] Failed to restore state:", e)
+      }
+    }
+    setIsStateLoaded(true)
+  }, []) // ВАЖНО: Пустой массив зависимостей
+
+  // 2. СОХРАНЕНИЕ состояния при изменениях (только после загрузки)
+  useEffect(() => {
+    if (!isStateLoaded) {
+      console.log("[v0] Skipping save - state not loaded yet")
+      return
+    }
+    
+    // Не сохраняем пустое начальное состояние
+    if (!selectedTrip && tripStatus === STATE.PREP_IDLE && !tripId) {
+      console.log("[v0] Skipping save - initial state")
+      return
+    }
+    
+    // Конвертируем Map в объект для сохранения
+    const stopHistoryObject: Record<number, StopHistory> = {}
+    stopHistoryMap.forEach((value, key) => {
+      stopHistoryObject[key] = value
+    })
+    
+    const stateToSave = {
+      tripStatus,
+      tripId,
+      selectedTrip,
+      isDirectionReversed,
+      currentStopIndex,
+      manualOccupied,
+      areSeatsLocked,
+      isGeoTrackerActive,
+      prepareTimer,
+      visitedStops: Array.from(visitedStops),
+      stopHistoryMap: stopHistoryObject,
+      bookings,
+      seats,
+      queuePassengers,
+      stops,
+    }
+    
+    localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
+    console.log("[v0] State saved to localStorage")
+  }, [
+    isStateLoaded, // ДОБАВЛЕНО
     tripStatus,
     tripId,
     selectedTrip,
@@ -371,33 +401,13 @@ useEffect(() => {
     areSeatsLocked,
     isGeoTrackerActive,
     prepareTimer,
-    visitedStops: Array.from(visitedStops),
-    stopHistoryMap: stopHistoryObject,
+    visitedStops,
+    stopHistoryMap,
     bookings,
     seats,
     queuePassengers,
-    stops, // Добавлено сохранение остановок
-  }
-  
-  localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
-  console.log("[v0] State saved to localStorage")
-}, [
-  tripStatus,
-  tripId,
-  selectedTrip,
-  isDirectionReversed,
-  currentStopIndex,
-  manualOccupied,
-  areSeatsLocked,
-  isGeoTrackerActive,
-  prepareTimer,
-  visitedStops,
-  stopHistoryMap,
-  bookings,
-  seats,
-  queuePassengers,
-  stops, // Добавлено в зависимости
-])
+    stops,
+  ])
 
   useEffect(() => {
     const savedAuthState = localStorage.getItem("driverAuthenticated")
