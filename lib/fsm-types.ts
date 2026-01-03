@@ -88,37 +88,37 @@ export const RACE_STATE_TO_PANELS: Record<RaceState, PanelVisibility> = {
     mainButton: true,
     queue: false,
     reservation: false,
-    cash: false, // Исправлено
+    cash: false, // Блок Места скрыт
   },
   RACE_WAITING_START: {
     mainButton: true,
     queue: false,
     reservation: false,
-    cash: false, // Исправлено
+    cash: false, // Блок Места скрыт
   },
   RACE_BOARDING: {
     mainButton: true,
     queue: true,
     reservation: true,
-    cash: true,
+    cash: true, // Блок Места виден
   },
   RACE_IN_TRANSIT: {
     mainButton: true,
     queue: false,
     reservation: false,
-    cash: true,
+    cash: false, // ИЗМЕНЕНО: Блок Места скрыт в пути
   },
   RACE_ARRIVED_STOP: {
     mainButton: true,
     queue: true,
     reservation: true,
-    cash: true,
+    cash: true, // Блок Места виден
   },
   RACE_FINISHED: {
-    mainButton: true, // Изменено на true
+    mainButton: true,
     queue: false,
     reservation: false,
-    cash: false,
+    cash: false, // Блок Места скрыт
   },
 };
 
