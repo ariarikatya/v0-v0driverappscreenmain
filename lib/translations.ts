@@ -114,6 +114,7 @@ notFoundAtStop: "Не найден на остановке",
 accident: "Авария",
 conflict: "Конфликтная ситуация",
 other: "Иное",
+commission: "Комиссия",
   },
   en: {
     // Auth
@@ -223,6 +224,7 @@ other: "Иное",
     createOperation: "Create Operation",
     scanError: "Scan Error",
     invalidQR: "Invalid or expired QR code",
+    commission: "Commission",
   },
   fr: {
     // Auth
@@ -333,6 +335,7 @@ other: "Иное",
     createOperation: "Créer une opération",
     scanError: "Erreur de scan",
     invalidQR: "QR invalide ou expiré",
+    commission: "Commission",
   },
   ar: {
     // Auth
@@ -544,6 +547,7 @@ other: "Иное",
     createOperation: "إنشاء عملية",
     scanError: "خطأ في المسح",
     invalidQR: "رمز QR غير صالح أو منتهي",
+    commission: "العمولة",
   },
   "darija-latin": {
     login: "Dkhoul",
@@ -746,6 +750,7 @@ other: "Иное",
     createOperation: "إنشاء عملية",
     scanError: "خطأ في المسح",
     invalidQR: "رمز QR غير صالح",
+    commission: "العمولة",
   },
   "amazigh-latin": {
     login: "Kcem",

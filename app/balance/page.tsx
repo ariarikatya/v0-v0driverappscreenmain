@@ -125,7 +125,7 @@ export default function BalancePage() {
     if (type === "income") return t.income
     return t.client
   }
-
+const [commission, setCommission] = useState<number>(325) // 10% от дневного дохода
   const getPaymentMethodLabel = (method: "cash" | "qr") => {
     if (method === "qr") return t.qr
     return language === "ru" ? "ЛС" : "LS"
@@ -572,16 +572,20 @@ export default function BalancePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-background/50">
-                <div className="text-xs text-muted-foreground mb-1">{t.dailyIncome}</div>
-                <div className="text-base font-semibold text-blue-600">{formatCurrency(3250)} RUB</div>
-              </div>
-              <div className="p-3 rounded-lg bg-background/50">
-                <div className="text-xs text-muted-foreground mb-1">{t.weeklyIncome}</div>
-                <div className="text-base font-semibold text-purple-600">{formatCurrency(18700)} RUB</div>
-              </div>
-            </div>
+            <div className="grid grid-cols-3 gap-3">
+  <div className="p-3 rounded-lg bg-background/50">
+    <div className="text-xs text-muted-foreground mb-1">{t.dailyIncome}</div>
+    <div className="text-base font-semibold text-blue-600">{formatCurrency(3250)} RUB</div>
+  </div>
+  <div className="p-3 rounded-lg bg-background/50">
+    <div className="text-xs text-muted-foreground mb-1">{t.weeklyIncome}</div>
+    <div className="text-base font-semibold text-purple-600">{formatCurrency(18700)} RUB</div>
+  </div>
+  <div className="p-3 rounded-lg bg-background/50">
+    <div className="text-xs text-muted-foreground mb-1">{language === "ru" ? "Комиссия" : "Commission"}</div>
+    <div className="text-base font-semibold text-orange-600">{formatCurrency(commission)} RUB</div>
+  </div>
+</div>
           </div>
         </Card>
 
@@ -828,7 +832,7 @@ export default function BalancePage() {
                     variant="default"
                     className="w-full"
                   >
-                    {language === "ru" ? "Добавить депозит в расчеты" : "Add deposit to settlements"}
+                    {language === "ru" ? "Добавить депозит, расчеты и комиссию" : "Add deposit, settlements and commission"}
                   </Button>
                 )}
               </div>
