@@ -262,11 +262,11 @@ export default function DriverDashboard() {
   const [isStateLoaded, setIsStateLoaded] = useState(false)
 const [stopVoting, setStopVoting] = useState<StopVoting>({
   1: [
-    { id: 1, timeLeft: 45 }
+    { id: 1, timeLeft: 60 }
+    { id: 2, timeLeft: 60 }
   ],
   2: [
-    { id: 1, timeLeft: 30 },
-    { id: 2, timeLeft: 50 }
+    { id: 1, timeLeft: 60 },
   ]
 })
 useEffect(() => {
