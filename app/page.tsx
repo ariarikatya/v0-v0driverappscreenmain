@@ -135,7 +135,7 @@ const tripRoutes = {
 
 export default function DriverDashboard() {
   const [currentStopIndex, setCurrentStopIndex] = useState<number>(0)
-  const [visitedStops, setVisitedStops] = useState(new Set<number>())
+  const [visitedStops, setVisitedStops] = useState(new Set() as Set<number>)
 
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showRegister, setShowRegister] = useState(false)
@@ -161,7 +161,7 @@ export default function DriverDashboard() {
     createdAt: string
     scannedPassengerId?: number
   } | null>(null)
-  const [stopHistoryMap, setStopHistoryMap] = useState(new Map<number, StopHistory>())
+  const [stopHistoryMap, setStopHistoryMap] = useState(new Map() as Map<number, StopHistory>)
 
   const [stops, setStops] = useState<RouteStop[]>(tripRoutes["247"].stops)
 
@@ -260,33 +260,31 @@ export default function DriverDashboard() {
   const scanInProgressRef = useRef(false)
 
   const [isStateLoaded, setIsStateLoaded] = useState(false)
-const [stopVoting, setStopVoting] = useState<StopVoting>({
-  1: [
-    { id: 1, timeLeft: 60 }
-    { id: 2, timeLeft: 60 }
-  ],
-  2: [
-    { id: 1, timeLeft: 60 },
-  ]
-})
-useEffect(() => {
-  const interval = setInterval(() => {
-    setStopVoting(prev => {
-      const updated = { ...prev }
-      Object.keys(updated).forEach(stopId => {
-        updated[Number(stopId)] = updated[Number(stopId)]
-          .map(voter => ({ ...voter, timeLeft: voter.timeLeft - 1 }))
-          .filter(voter => voter.timeLeft > 0)
-        if (updated[Number(stopId)].length === 0) {
-          delete updated[Number(stopId)]
-        }
+  const [stopVoting, setStopVoting] = useState<StopVoting>({
+    1: [
+      { id: 1, timeLeft: 60 },
+      { id: 2, timeLeft: 60 },
+    ],
+    2: [{ id: 1, timeLeft: 60 }],
+  })
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStopVoting((prev) => {
+        const updated = { ...prev }
+        Object.keys(updated).forEach((stopId) => {
+          updated[Number(stopId)] = updated[Number(stopId)]
+            .map((voter) => ({ ...voter, timeLeft: voter.timeLeft - 1 }))
+            .filter((voter) => voter.timeLeft > 0)
+          if (updated[Number(stopId)].length === 0) {
+            delete updated[Number(stopId)]
+          }
+        })
+        return updated
       })
-      return updated
-    })
-  }, 1000)
-  
-  return () => clearInterval(interval)
-}, [])
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [])
   useEffect(() => {
     // Auth load
     const savedAuthState = localStorage.getItem("driverAuthenticated")
@@ -319,6 +317,7 @@ useEffect(() => {
         if (parsedState.bookings) setBookings(parsedState.bookings)
         if (parsedState.seats) setSeats(parsedState.seats)
         if (parsedState.queuePassengers) setQueuePassengers(parsedState.queuePassengers)
+        if (parsedState.stopVoting) setStopVoting(parsedState.stopVoting)
 
         // Восстанавливаем Map
         if (parsedState.stopHistoryMap) {
@@ -388,6 +387,7 @@ useEffect(() => {
       seats,
       queuePassengers,
       stops,
+      stopVoting,
     }
 
     localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
@@ -410,6 +410,7 @@ useEffect(() => {
     seats,
     queuePassengers,
     stops,
+    stopVoting,
   ])
 
   useEffect(() => {
@@ -576,6 +577,13 @@ useEffect(() => {
     setCurrentStopIndex(0)
     setVisitedStops(new Set())
     setStopHistoryMap(new Map())
+    setStopVoting({
+  1: [
+    { id: 1, timeLeft: 60 },
+    { id: 2, timeLeft: 60 },
+  ],
+  2: [{ id: 1, timeLeft: 60 }],
+})
     setManualOccupied(0)
 
     // Сбросить статусы броней к начальному состоянию
@@ -958,7 +966,7 @@ useEffect(() => {
           status: "occupied",
           passengerName: booking.passengerName,
           fromStop: booking.fromStopIndex,
-          toToStop: booking.toStopIndex,
+          toStop: booking.toStopIndex,
           paymentMethod: "qr",
           amountPaid: booking.amount / bookingCount,
         }
@@ -1021,7 +1029,7 @@ useEffect(() => {
               status: "free" as const,
               passengerName: undefined,
               fromStop: undefined,
-              toToStop: undefined,
+              toTo: undefined,
               paymentMethod: undefined,
               amountPaid: undefined,
             }
@@ -1849,7 +1857,7 @@ useEffect(() => {
 
       <div className="px-2 pt-4 space-y-6">
         {selectedTrip &&
-          panelVisibility.cash && ( // ИЗМЕНЕНО: добавлено panelVisibility.cash
+          panelVisibility.cash && ( // И<bos>ВЛЕНО: добавлено panelVisibility.cash
             <Card className={`p-4 border-2 border-border ${isPanelsDisabled ? "opacity-50 pointer-events-none" : ""}`}>
               <h2 className="text-lg font-bold text-foreground mb-4">{t.seats}</h2>
               <div className="grid grid-cols-4 gap-3">
@@ -2219,39 +2227,42 @@ useEffect(() => {
                             </div>
                           )}
                           {/* Голосующие на остановке - показываем на всех не прошедших остановках */}
-{stopVoting[stop.id] && stopVoting[stop.id].length > 0 && !isPastStop && (
-  <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200">
-    <div className="flex items-center justify-between mb-2">
-      <div className="flex items-center gap-2">
-        <User className="h-4 w-4 text-amber-600" />
-        <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-          {language === "ru" ? "Голосуют" : "Voting"}: {stopVoting[stop.id].length}
-        </span>
-      </div>
-    </div>
-    <div className="flex flex-wrap gap-2">
-      {stopVoting[stop.id].map(voter => (
-        <div key={voter.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-800 border border-amber-300 dark:border-amber-700">
-          <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-          <span className="text-sm font-mono font-semibold text-amber-900 dark:text-amber-100">
-            0:{String(voter.timeLeft).padStart(2, '0')}
-          </span>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+                          {stopVoting[stop.id] && stopVoting[stop.id].length > 0 && !isPastStop && (
+                            <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-amber-600" />
+                                  <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                    {language === "ru" ? "Голосуют" : "Voting"}: {stopVoting[stop.id].length}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {stopVoting[stop.id].map((voter) => (
+                                  <div
+                                    key={voter.id}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-800 border border-amber-300 dark:border-amber-700"
+                                  >
+                                    <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                    <span className="text-sm font-mono font-semibold text-amber-900 dark:text-amber-100">
+                                      0:{String(voter.timeLeft).padStart(2, "0")}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
-{visibleBookings.length === 0 && !isPastStop && stopBookings.length > 0 && (
-  <div className="text-xs text-muted-foreground italic mt-2">
-    {language === "ru"
-      ? "Нет свободных мест для новых броней"
-      : "No free seats for new bookings"}
-  </div>
-)}
+                          {visibleBookings.length === 0 && !isPastStop && stopBookings.length > 0 && (
+                            <div className="text-xs text-muted-foreground italic mt-2">
+                              {language === "ru"
+                                ? "Нет свободных мест для новых броней"
+                                : "No free seats for new bookings"}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    
+
                       {index < array.length - 1 && (
                         <div className="ml-2">
                           <div className="w-px h-8 bg-border" />
