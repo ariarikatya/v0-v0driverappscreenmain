@@ -230,6 +230,7 @@ const [commission, setCommission] = useState<number>(325) // 10% от дневн
 
         if (person.id === 999) {
           setDeposit(0)
+          setCommission(0)
         }
 
         toast({
@@ -925,7 +926,7 @@ useEffect(() => {
                         <div className="text-xs text-muted-foreground mt-1 flex items-center justify-between">
                           {result.type !== "dispatcher" && result.dispatcherName && (
                             <span>
-                              {language === "ru" ? "Через диспетчера" : "Through dispatcher"} {result.dispatcherName}
+                              {language === "ru" ? "Через" : "Through"} {result.dispatcherName}
                             </span>
                           )}
                           <span className={result.type !== "dispatcher" && result.dispatcherName ? "" : "ml-auto"}>
@@ -1065,6 +1066,7 @@ useEffect(() => {
                           // Если это был депозит (id === 999), обнуляем его
                           if (currentSettlementPerson.id === 999) {
                             setDeposit(0)
+                            setCommission(0)
                           }
 
                           toast({
