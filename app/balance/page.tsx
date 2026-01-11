@@ -60,8 +60,12 @@ export default function BalancePage() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("today")
   const [paymentFilters, setPaymentFilters] = useState<PaymentFilter[]>(["qr", "cash"])
   const [balance, setBalance] = useState<number>(12450)
-  const [activeTab, setActiveTab] = useState<"operations" | "settlements">("operations")
-
+  const [activeTab, setActiveTab] = useState<"operations" | "settlements">(
+  () => (typeof window !== 'undefined' && localStorage.getItem('balanceActiveTab') as "operations" | "settlements") || "operations"
+)
+useEffect(() => {
+  localStorage.setItem('balanceActiveTab', activeTab)
+}, [activeTab])
   const [isPanelsDisabled, setIsPanelsDisabled] = useState(false)
 
   const [transactions, setTransactions] = useState<Transaction[]>([
@@ -125,6 +129,8 @@ export default function BalancePage() {
     if (type === "income") return t.income
     return t.client
   }
+  const [isDepositAdded, setIsDepositAdded] = useState(false)
+
 const [commission, setCommission] = useState<number>(325) // 10% от дневного дохода
   const getPaymentMethodLabel = (method: "cash" | "qr") => {
     if (method === "qr") return t.qr
@@ -517,7 +523,12 @@ const [commission, setCommission] = useState<number>(325) // 10% от дневн
   const handleSelectDispatcher = (personId: number, dispatcherId: string) => {
     setRecalcResults(recalcResults.map((p) => (p.id === personId ? { ...p, selectedDispatcher: dispatcherId } : p)))
   }
-
+useEffect(() => {
+  // Сбрасываем флаг если появились новые депозит или комиссия
+  if ((deposit > 0 || commission > 0) && !recalcResults.some((r) => r.id === 999)) {
+    setIsDepositAdded(false)
+  }
+}, [deposit, commission, recalcResults])
   useEffect(() => {
     const savedAuthState = localStorage.getItem("driverAuthenticated")
     if (savedAuthState !== "true") {
@@ -809,30 +820,31 @@ const [commission, setCommission] = useState<number>(325) // 10% от дневн
                   )}
                 </div>
 
-                {deposit > 0 && (
+                {deposit > 0 && !isDepositAdded && (
                   <Button
                     onClick={() => {
                       const depositExists = recalcResults.some((r) => r.id === 999)
                       if (!depositExists) {
                         const depositItem: SettlementPerson = {
                           id: 999,
-                          name: language === "ru" ? "Депозит" : "Deposit",
-                          amount: -deposit,
+                          name: language === "ru" ? "Депозит и комиссия" : "Deposit and comission",
+                          amount: -(deposit + commission),
                           type: "driver",
                           throughDispatcher: true,
                           selectedDispatcher: "",
                         }
                         setRecalcResults((prev) => [...prev, depositItem])
+                        setIsDepositAdded(true)
 
                         toast({
-                          title: language === "ru" ? "Депозит добавлен" : "Deposit added",
+                          title: language === "ru" ? "Депозит и комиссия добавлены" : "Deposit and comission added",
                         })
                       }
                     }}
                     variant="default"
                     className="w-full"
                   >
-                    {language === "ru" ? "Добавить депозит, расчеты и комиссию" : "Add deposit, settlements and commission"}
+                    {language === "ru" ? "Добавить депозит и комиссию в расчеты" : "Add deposit and commission in settlements"}
                   </Button>
                 )}
               </div>

@@ -155,6 +155,8 @@ export default function DriverDashboard() {
   const t = translations[language]
   const { toast } = useToast()
 
+  const [activeTab, setActiveTab] = useState<string>("dashboard")
+
   const [tripStatus, setTripStatus] = useState<TripStatus>(STATE.PREP_IDLE)
   const [tripId, setTripId] = useState<string>("")
   const [selectedTrip, setSelectedTrip] = useState("247")
@@ -270,6 +272,9 @@ export default function DriverDashboard() {
   const panelVisibility = RACE_STATE_TO_PANELS[currentRaceState]
   const scanInProgressRef = useRef(false)
 
+  // ADDED: isDepositAdded state and corresponding setter
+  const [isDepositAdded, setIsDepositAdded] = useState(false) // Initialize as false
+
   const [isStateLoaded, setIsStateLoaded] = useState(false)
   const [stopVoting, setStopVoting] = useState<StopVoting>({
     1: [
@@ -323,12 +328,15 @@ export default function DriverDashboard() {
         if (parsedState.hasOwnProperty("areSeatsLocked")) setAreSeatsLocked(parsedState.areSeatsLocked)
         if (parsedState.hasOwnProperty("isGeoTrackerActive")) setIsGeoTrackerActive(parsedState.isGeoTrackerActive)
         if (parsedState.hasOwnProperty("prepareTimer")) setPrepareTimer(parsedState.prepareTimer)
+        // ADDED: Load isDepositAdded
+        if (parsedState.hasOwnProperty("isDepositAdded")) setIsDepositAdded(parsedState.isDepositAdded)
 
         if (parsedState.visitedStops) setVisitedStops(new Set(parsedState.visitedStops))
         if (parsedState.bookings) setBookings(parsedState.bookings)
         if (parsedState.seats) setSeats(parsedState.seats)
         if (parsedState.queuePassengers) setQueuePassengers(parsedState.queuePassengers)
         if (parsedState.stopVoting) setStopVoting(parsedState.stopVoting)
+        if (parsedState.activeTab) setActiveTab(parsedState.activeTab)
 
         // Восстанавливаем Map
         if (parsedState.stopHistoryMap) {
@@ -399,6 +407,9 @@ export default function DriverDashboard() {
       queuePassengers,
       stops,
       stopVoting,
+      activeTab,
+      // ADDED: Save isDepositAdded
+      isDepositAdded,
     }
 
     localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
@@ -422,6 +433,8 @@ export default function DriverDashboard() {
     queuePassengers,
     stops,
     stopVoting,
+    // ADDED: isDepositAdded in dependencies
+    isDepositAdded,
   ])
 
   useEffect(() => {
@@ -596,6 +609,7 @@ export default function DriverDashboard() {
       2: [{ id: 1, timeLeft: 60 }],
     })
     setManualOccupied(0)
+    setIsDepositAdded(false) // ADDED: Reset isDepositAdded
 
     // Сбросить статусы броней к начальному состоянию
     setBookings([
@@ -1693,10 +1707,11 @@ export default function DriverDashboard() {
               </Button>
             )}
             {selectedTrip && (
-  <Badge variant="secondary" className="text-sm px-2 py-1 whitespace-nowrap">
-    {language === "ru" ? "Тариф:" : "Tariff:"} {formatCurrency(tripRoutes[selectedTrip as keyof typeof tripRoutes].tariff)} ₽
-  </Badge>
-)}
+              <Badge variant="secondary" className="text-sm px-2 py-1 whitespace-nowrap">
+                {language === "ru" ? "Тариф:" : "Tariff:"}{" "}
+                {formatCurrency(tripRoutes[selectedTrip as keyof typeof tripRoutes].tariff)} ₽
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={tripStatus !== STATE.PREP_IDLE ? "default" : "secondary"} className="text-2xl px-3 py-1">
@@ -2243,31 +2258,31 @@ export default function DriverDashboard() {
                             </div>
                           )}
                           {stopVoting[stop.id] && stopVoting[stop.id].length > 0 && !isPastStop && (
-  <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200">
-    <div className="flex items-center justify-between mb-2">
-      <div className="flex items-center gap-2">
-        <User className="h-4 w-4 text-amber-600" />
-        <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-          {language === "ru" ? "Голосуют:" : "Voting:"} {stopVoting[stop.id].length}{" "}
-          ({stopVoting[stop.id].reduce((sum, v) => sum + (v.passengerCount || 1), 0)})
-        </span>
-      </div>
-    </div>
-    <div className="flex flex-wrap gap-2">
-      {stopVoting[stop.id].map((voter) => (
-        <div
-          key={voter.id}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-800 border border-amber-300 dark:border-amber-700"
-        >
-          <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-          <span className="text-sm font-mono font-semibold text-amber-900 dark:text-amber-100">
-            0:{String(voter.timeLeft).padStart(2, "0")} ({voter.passengerCount || 1})
-          </span>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+                            <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-amber-600" />
+                                  <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                    {language === "ru" ? "Голосуют:" : "Voting:"} {stopVoting[stop.id].length} (
+                                    {stopVoting[stop.id].reduce((sum, v) => sum + (v.passengerCount || 1), 0)})
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {stopVoting[stop.id].map((voter) => (
+                                  <div
+                                    key={voter.id}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-800 border border-amber-300 dark:border-amber-700"
+                                  >
+                                    <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                    <span className="text-sm font-mono font-semibold text-amber-900 dark:text-amber-100">
+                                      0:{String(voter.timeLeft).padStart(2, "0")} ({voter.passengerCount || 1})
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {visibleBookings.length === 0 && !isPastStop && stopBookings.length > 0 && (
                             <div className="text-xs text-muted-foreground italic mt-2">
