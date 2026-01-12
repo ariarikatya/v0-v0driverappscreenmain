@@ -113,7 +113,7 @@ const tripRoutes: Record<string, RouteData> = {
     tariff: 350, // ДОБАВЛЕНО: тариф в рублях
     stops: [
       { id: 0, name: "Центр", time: "14:00" },
-      { id: 1, name: "ул. Ленина", time: "14:15" },
+      { id: 1, name: "пл. Ленина", time: "14:15" },
       { id: 2, name: "ТЦ Галерея", time: "14:45" },
       { id: 3, name: "Вокзал", time: "15:15" },
     ],
@@ -156,6 +156,8 @@ export default function DriverDashboard() {
   const { toast } = useToast()
 
   const [activeTab, setActiveTab] = useState<string>("dashboard")
+  const [deposit, setDeposit] = useState<number>(0)
+  const [commission, setCommission] = useState<number>(0) // Added commission state
 
   const [tripStatus, setTripStatus] = useState<TripStatus>(STATE.PREP_IDLE)
   const [tripId, setTripId] = useState<string>("")
@@ -328,8 +330,10 @@ export default function DriverDashboard() {
         if (parsedState.hasOwnProperty("areSeatsLocked")) setAreSeatsLocked(parsedState.areSeatsLocked)
         if (parsedState.hasOwnProperty("isGeoTrackerActive")) setIsGeoTrackerActive(parsedState.isGeoTrackerActive)
         if (parsedState.hasOwnProperty("prepareTimer")) setPrepareTimer(parsedState.prepareTimer)
-        // ADDED: Load isDepositAdded
+        if (parsedState.hasOwnProperty("deposit")) setDeposit(parsedState.deposit)
+        if (parsedState.hasOwnProperty("commission")) setCommission(parsedState.commission)
         if (parsedState.hasOwnProperty("isDepositAdded")) setIsDepositAdded(parsedState.isDepositAdded)
+        if (parsedState.activeTab) setActiveTab(parsedState.activeTab)
 
         if (parsedState.visitedStops) setVisitedStops(new Set(parsedState.visitedStops))
         if (parsedState.bookings) setBookings(parsedState.bookings)
@@ -407,9 +411,10 @@ export default function DriverDashboard() {
       queuePassengers,
       stops,
       stopVoting,
-      activeTab,
-      // ADDED: Save isDepositAdded
+      deposit,
+      commission,
       isDepositAdded,
+      activeTab,
     }
 
     localStorage.setItem("driverAppState", JSON.stringify(stateToSave))
@@ -433,8 +438,10 @@ export default function DriverDashboard() {
     queuePassengers,
     stops,
     stopVoting,
-    // ADDED: isDepositAdded in dependencies
+    deposit,
+    commission,
     isDepositAdded,
+    activeTab,
   ])
 
   useEffect(() => {

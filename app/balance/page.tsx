@@ -60,12 +60,20 @@ export default function BalancePage() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("today")
   const [paymentFilters, setPaymentFilters] = useState<PaymentFilter[]>(["qr", "cash"])
   const [balance, setBalance] = useState<number>(12450)
-  const [activeTab, setActiveTab] = useState<"operations" | "settlements">(
-  () => (typeof window !== 'undefined' && localStorage.getItem('balanceActiveTab') as "operations" | "settlements") || "operations"
-)
-useEffect(() => {
-  localStorage.setItem('balanceActiveTab', activeTab)
-}, [activeTab])
+  const [activeTab, setActiveTab] = useState<"operations" | "settlements">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("balanceActiveTab")
+      if (saved === "operations" || saved === "settlements") {
+        return saved
+      }
+    }
+    return "operations"
+  })
+
+  useEffect(() => {
+    localStorage.setItem("balanceActiveTab", activeTab)
+  }, [activeTab])
+
   const [isPanelsDisabled, setIsPanelsDisabled] = useState(false)
 
   const [transactions, setTransactions] = useState<Transaction[]>([
@@ -122,7 +130,7 @@ useEffect(() => {
   const [scannedQRData, setScannedQRData] = useState<QRScanData | null>(null)
   const [showQRResult, setShowQRResult] = useState<"operations" | "settlements" | false>(false) // qrError: null | 'not_found' | 'mismatch'
   const [qrError, setQRError] = useState<null | "not_found" | "mismatch">(null)
-  const [deposit, setDeposit] = useState<number>(2500) // Новое состояние для депозита
+  const [deposit, setDeposit] = useState<number>(0)
   const getTransactionTypeLabel = (type: string) => {
     if (type === "booking") return t.booking
     if (type === "boarding") return t.boarding
@@ -131,7 +139,7 @@ useEffect(() => {
   }
   const [isDepositAdded, setIsDepositAdded] = useState(false)
 
-const [commission, setCommission] = useState<number>(325) // 10% от дневного дохода
+  const [commission, setCommission] = useState<number>(0)
   const getPaymentMethodLabel = (method: "cash" | "qr") => {
     if (method === "qr") return t.qr
     return language === "ru" ? "ЛС" : "LS"
@@ -163,18 +171,18 @@ const [commission, setCommission] = useState<number>(325) // 10% от дневн
 
   // 1. Кнопка перерасчета
   const handleRecalculate = () => {
-  setLastRecalcTime(new Date())
-  setIsPanelsDisabled(true) // Эта строка уже есть
+    setLastRecalcTime(new Date())
+    setIsPanelsDisabled(true) // Эта строка уже есть
 
-  toast({
-    title: language === "ru" ? "Список обновлен" : "List updated",
-  })
-  
-  // Добавьте эту строку для разблокировки через 2 секунды
-  setTimeout(() => {
-    setIsPanelsDisabled(false)
-  }, 2000)
-}
+    toast({
+      title: language === "ru" ? "Список обновлен" : "List updated",
+    })
+
+    // Добавьте эту строку для разблокировки через 2 секунды
+    setTimeout(() => {
+      setIsPanelsDisabled(false)
+    }, 2000)
+  }
 
   // Обработка действий (Принять/Списать)
   const handleSettlementAction = (person: SettlementPerson, action: "debit" | "credit") => {
@@ -524,19 +532,58 @@ const [commission, setCommission] = useState<number>(325) // 10% от дневн
   const handleSelectDispatcher = (personId: number, dispatcherId: string) => {
     setRecalcResults(recalcResults.map((p) => (p.id === personId ? { ...p, selectedDispatcher: dispatcherId } : p)))
   }
-useEffect(() => {
-  // Сбрасываем флаг если появились новые депозит или комиссия
-  if ((deposit > 0 || commission > 0) && !recalcResults.some((r) => r.id === 999)) {
-    setIsDepositAdded(false)
-  }
-}, [deposit, commission, recalcResults])
+  useEffect(() => {
+    // Сбрасываем флаг если появились новые депозит или комиссия
+    if ((deposit > 0 || commission > 0) && !recalcResults.some((r) => r.id === 999)) {
+      setIsDepositAdded(false)
+    }
+  }, [deposit, commission, recalcResults])
+
   useEffect(() => {
     const savedAuthState = localStorage.getItem("driverAuthenticated")
-    if (savedAuthState !== "true") {
-      router.push("/")
-    }
-  }, [router])
 
+    const savedBalanceState = localStorage.getItem("balancePageState")
+    if (savedBalanceState) {
+      try {
+        const parsedState = JSON.parse(savedBalanceState)
+
+        if (parsedState.hasOwnProperty("deposit")) {
+          setDeposit(parsedState.deposit)
+        } else {
+          setDeposit(2500)
+        }
+
+        if (parsedState.hasOwnProperty("commission")) {
+          setCommission(parsedState.commission)
+        } else {
+          setCommission(325)
+        }
+
+        if (parsedState.hasOwnProperty("isDepositAdded")) setIsDepositAdded(parsedState.isDepositAdded)
+        if (parsedState.activeTab) setActiveTab(parsedState.activeTab)
+        if (parsedState.recalcResults) setRecalcResults(parsedState.recalcResults)
+
+        console.log("[Balance] State loaded from localStorage")
+      } catch (error) {
+        console.error("[Balance] Failed to load state:", error)
+      }
+    } else {
+      setDeposit(2500)
+      setCommission(325)
+    }
+  }, [])
+
+  useEffect(() => {
+    const balanceState = {
+      deposit,
+      commission,
+      isDepositAdded,
+      activeTab,
+      recalcResults,
+    }
+
+    localStorage.setItem("balancePageState", JSON.stringify(balanceState))
+  }, [deposit, commission, isDepositAdded, activeTab, recalcResults])
   return (
     <div className="min-h-screen bg-background pb-6">
       <div className="bg-card border-b border-border px-4 py-4">
@@ -585,19 +632,21 @@ useEffect(() => {
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-  <div className="p-3 rounded-lg bg-background/50">
-    <div className="text-xs text-muted-foreground mb-1">{t.dailyIncome}</div>
-    <div className="text-base font-semibold text-blue-600">{formatCurrency(3250)} RUB</div>
-  </div>
-  <div className="p-3 rounded-lg bg-background/50">
-    <div className="text-xs text-muted-foreground mb-1">{t.weeklyIncome}</div>
-    <div className="text-base font-semibold text-purple-600">{formatCurrency(18700)} RUB</div>
-  </div>
-  <div className="p-3 rounded-lg bg-background/50">
-    <div className="text-xs text-muted-foreground mb-1">{language === "ru" ? "Комиссия" : "Commission"}</div>
-    <div className="text-base font-semibold text-orange-600">{formatCurrency(commission)} RUB</div>
-  </div>
-</div>
+              <div className="p-3 rounded-lg bg-background/50">
+                <div className="text-xs text-muted-foreground mb-1">{t.dailyIncome}</div>
+                <div className="text-base font-semibold text-blue-600">{formatCurrency(3250)} RUB</div>
+              </div>
+              <div className="p-3 rounded-lg bg-background/50">
+                <div className="text-xs text-muted-foreground mb-1">{t.weeklyIncome}</div>
+                <div className="text-base font-semibold text-purple-600">{formatCurrency(18700)} RUB</div>
+              </div>
+              <div className="p-3 rounded-lg bg-background/50">
+                <div className="text-xs text-muted-foreground mb-1">
+                  {language === "ru" ? "Комиссия" : "Commission"}
+                </div>
+                <div className="text-base font-semibold text-orange-600">{formatCurrency(commission)} RUB</div>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -845,7 +894,9 @@ useEffect(() => {
                     variant="default"
                     className="w-full"
                   >
-                    {language === "ru" ? "Добавить депозит и комиссию в расчеты" : "Add deposit and commission in settlements"}
+                    {language === "ru"
+                      ? "Добавить депозит и комиссию в расчеты"
+                      : "Add deposit and commission in settlements"}
                   </Button>
                 )}
               </div>
